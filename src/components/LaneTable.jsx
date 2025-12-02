@@ -1,5 +1,5 @@
-import React from 'react';
-import { Edit2, ChevronUp, ChevronDown, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit2, ChevronUp, ChevronDown, CheckCircle, AlertTriangle, XCircle, Check, X } from 'lucide-react';
 import { scenarios } from '../data/demoData';
 
 export default function LaneTable({ 
@@ -11,8 +11,112 @@ export default function LaneTable({
   onSelectLane,
   sortField,
   sortDirection,
-  onSort
+  onSort,
+  onLaneUpdate
 }) {
+  const [editingCell, setEditingCell] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [editError, setEditError] = useState(null);
+  const startEditing = (laneId, field, currentValue) => {
+    setEditingCell({ laneId, field });
+    setEditValue(currentValue);
+    setEditError(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingCell(null);
+    setEditValue('');
+    setEditError(null);
+  };
+
+  const validateAndSave = (lane, field, value) => {
+    setEditError(null);
+    
+    switch (field) {
+      case 'baseRate':
+        const rate = parseFloat(value);
+        if (isNaN(rate) || rate < 0) {
+          setEditError('Rate must be a positive number');
+          return false;
+        }
+        break;
+      case 'distance':
+        const dist = parseInt(value);
+        if (isNaN(dist) || dist < 0) {
+          setEditError('Distance must be a positive integer');
+          return false;
+        }
+        break;
+      case 'origin':
+      case 'destination':
+        if (!value.trim()) {
+          setEditError('This field cannot be empty');
+          return false;
+        }
+        break;
+      default:
+        break;
+    }
+    
+    return true;
+  };
+
+  const saveEdit = () => {
+    if (!editingCell) return;
+    
+    const { laneId, field } = editingCell;
+    const lane = lanes.find(l => l.id === laneId);
+    if (!lane) return;
+
+    if (!validateAndSave(lane, field, editValue)) {
+      return;
+    }
+
+    // Update lane
+    const updatedLane = { ...lane };
+    
+    if (field === 'baseRate') {
+      updatedLane.baseRate = parseFloat(editValue).toFixed(2);
+      // Recalculate margin
+      // baseRate is the rate per mile we charge (revenue)
+      // Calculate revenue
+      const revenue = parseFloat(updatedLane.baseRate) * updatedLane.distance;
+      // Calculate cost components (excluding linehaul cost which we need to estimate)
+      const fuel = parseFloat(updatedLane.fuelSurcharge) * updatedLane.distance;
+      const accessorials = parseFloat(updatedLane.accessorials);
+      const deadheadCost = updatedLane.deadhead * 1.5;
+      // Estimate linehaul cost: typically 70-80% of revenue in freight industry
+      // Using 75% as a standard estimate
+      const estimatedLinehaulCost = revenue * 0.75;
+      // Total cost = linehaul cost + other costs
+      const totalCost = estimatedLinehaulCost + fuel + accessorials + deadheadCost;
+      // Margin = (Revenue - Total Cost) / Total Cost * 100
+      const margin = totalCost > 0 ? (((revenue - totalCost) / totalCost) * 100).toFixed(1) : '10.0';
+      updatedLane.margin = margin;
+      updatedLane.status = parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid';
+    } else if (field === 'distance') {
+      updatedLane.distance = parseInt(editValue);
+      // Recalculate margin using same logic
+      const revenue = parseFloat(updatedLane.baseRate) * updatedLane.distance;
+      const fuel = parseFloat(updatedLane.fuelSurcharge) * updatedLane.distance;
+      const accessorials = parseFloat(updatedLane.accessorials);
+      const deadheadCost = updatedLane.deadhead * 1.5;
+      const estimatedLinehaulCost = revenue * 0.75;
+      const totalCost = estimatedLinehaulCost + fuel + accessorials + deadheadCost;
+      const margin = totalCost > 0 ? (((revenue - totalCost) / totalCost) * 100).toFixed(1) : '10.0';
+      updatedLane.margin = margin;
+      updatedLane.status = parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid';
+    } else {
+      updatedLane[field] = editValue;
+    }
+
+    if (onLaneUpdate) {
+      onLaneUpdate(updatedLane);
+    }
+
+    cancelEditing();
+  };
+
   return (
     <div className="glass-card rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
@@ -92,10 +196,56 @@ export default function LaneTable({
                   />
                 </td>
                 <td className="px-4 py-3 text-sm text-white mono">{lane.id}</td>
-                <td className="px-4 py-3 text-sm text-slate-300">{lane.origin}</td>
-                <td className="px-4 py-3 text-sm text-slate-300">{lane.destination}</td>
-                <td className="px-4 py-3 text-sm text-slate-300">{lane.distance}mi</td>
-                <td className="px-4 py-3 text-sm text-white font-medium">${lane.baseRate}/mi</td>
+                <EditableCell
+                  lane={lane}
+                  field="origin"
+                  value={lane.origin}
+                  editing={editingCell?.laneId === lane.id && editingCell?.field === 'origin'}
+                  onStartEdit={() => startEditing(lane.id, 'origin', lane.origin)}
+                  onSave={saveEdit}
+                  onCancel={cancelEditing}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  error={editError}
+                />
+                <EditableCell
+                  lane={lane}
+                  field="destination"
+                  value={lane.destination}
+                  editing={editingCell?.laneId === lane.id && editingCell?.field === 'destination'}
+                  onStartEdit={() => startEditing(lane.id, 'destination', lane.destination)}
+                  onSave={saveEdit}
+                  onCancel={cancelEditing}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  error={editError}
+                />
+                <EditableCell
+                  lane={lane}
+                  field="distance"
+                  value={`${lane.distance}mi`}
+                  editing={editingCell?.laneId === lane.id && editingCell?.field === 'distance'}
+                  onStartEdit={() => startEditing(lane.id, 'distance', lane.distance)}
+                  onSave={saveEdit}
+                  onCancel={cancelEditing}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  error={editError}
+                  type="number"
+                />
+                <EditableCell
+                  lane={lane}
+                  field="baseRate"
+                  value={`$${lane.baseRate}/mi`}
+                  editing={editingCell?.laneId === lane.id && editingCell?.field === 'baseRate'}
+                  onStartEdit={() => startEditing(lane.id, 'baseRate', lane.baseRate)}
+                  onSave={saveEdit}
+                  onCancel={cancelEditing}
+                  editValue={editValue}
+                  setEditValue={setEditValue}
+                  error={editError}
+                  type="number"
+                />
                 <td className="px-4 py-3">
                   <span className={`text-sm font-medium ${
                     parseFloat(lane.margin) < 8 ? 'text-red-400' :
@@ -111,9 +261,35 @@ export default function LaneTable({
                   <LaneStatusIndicator status={lane.status} />
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                  <button className="text-slate-400 hover:text-white transition-colors">
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                  {editingCell?.laneId === lane.id ? (
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={saveEdit}
+                        className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        title="Save"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="text-red-400 hover:text-red-300 transition-colors"
+                        title="Cancel"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditing(lane.id, 'baseRate', lane.baseRate);
+                      }}
+                      className="text-slate-400 hover:text-white transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -180,5 +356,51 @@ function LaneStatusIndicator({ status }) {
     <div className="flex items-center gap-2">
       <Icon className={`w-4 h-4 ${color}`} />
     </div>
+  );
+}
+
+function EditableCell({ lane, field, value, editing, onStartEdit, onSave, onCancel, editValue, setEditValue, error, type = 'text' }) {
+  if (editing) {
+    return (
+      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          {field === 'baseRate' && <span className="text-sm text-slate-400">$</span>}
+          <input
+            type={type}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onSave();
+              } else if (e.key === 'Escape') {
+                onCancel();
+              }
+            }}
+            className={`glass-card rounded px-2 py-1 text-sm text-white w-24 focus:outline-none focus:border-indigo-500 border ${
+              error ? 'border-red-500' : 'border-slate-700'
+            }`}
+            autoFocus
+          />
+          {field === 'distance' && <span className="text-sm text-slate-400">mi</span>}
+          {field === 'baseRate' && <span className="text-sm text-slate-400">/mi</span>}
+        </div>
+        {error && (
+          <p className="text-xs text-red-400 mt-1">{error}</p>
+        )}
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className="px-4 py-3 text-sm text-slate-300 cursor-pointer hover:bg-slate-800/50 rounded transition-colors"
+      onClick={(e) => {
+        e.stopPropagation();
+        onStartEdit();
+      }}
+      title="Click to edit"
+    >
+      {value}
+    </td>
   );
 }
