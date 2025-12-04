@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Edit2, ChevronUp, ChevronDown, CheckCircle, AlertTriangle, XCircle, Check, X } from 'lucide-react';
-import { scenarios } from '../data/demoData';
+import { Edit2, ChevronUp, ChevronDown, Check, X, AlertTriangle } from 'lucide-react';
+import { getLaneStatus } from '../constants/marginThresholds';
+import { getStatusConfig } from '../constants/statusConfig';
+import { checkRateTooHigh } from '../utils/rateCalculator';
 
 export default function LaneTable({ 
   lanes, 
@@ -93,7 +95,7 @@ export default function LaneTable({
       // Margin = (Revenue - Total Cost) / Total Cost * 100
       const margin = totalCost > 0 ? (((revenue - totalCost) / totalCost) * 100).toFixed(1) : '10.0';
       updatedLane.margin = margin;
-      updatedLane.status = parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid';
+      updatedLane.status = getLaneStatus(margin);
     } else if (field === 'distance') {
       updatedLane.distance = parseInt(editValue);
       // Recalculate margin using same logic
@@ -105,7 +107,7 @@ export default function LaneTable({
       const totalCost = estimatedLinehaulCost + fuel + accessorials + deadheadCost;
       const margin = totalCost > 0 ? (((revenue - totalCost) / totalCost) * 100).toFixed(1) : '10.0';
       updatedLane.margin = margin;
-      updatedLane.status = parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid';
+      updatedLane.status = getLaneStatus(margin);
     } else {
       updatedLane[field] = editValue;
     }
@@ -118,12 +120,12 @@ export default function LaneTable({
   };
 
   return (
-    <div className="glass-card rounded-xl overflow-hidden">
+    <div className="w-full">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm">
             <tr className="border-b border-slate-800">
-              <th className="px-4 py-3 text-left">
+              <th className="px-4 py-3 text-left bg-slate-900/95">
                 <input
                   type="checkbox"
                   checked={selectedLanes.size === lanes.length}
@@ -173,9 +175,8 @@ export default function LaneTable({
                 sortDirection={sortDirection} 
                 onSort={onSort} 
               />
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Scenario</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400">Status</th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400">Actions</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 bg-slate-900/95">Status</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 bg-slate-900/95">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -233,19 +234,34 @@ export default function LaneTable({
                   error={editError}
                   type="number"
                 />
-                <EditableCell
-                  lane={lane}
-                  field="baseRate"
-                  value={`$${lane.baseRate}/mi`}
-                  editing={editingCell?.laneId === lane.id && editingCell?.field === 'baseRate'}
-                  onStartEdit={() => startEditing(lane.id, 'baseRate', lane.baseRate)}
-                  onSave={saveEdit}
-                  onCancel={cancelEditing}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  error={editError}
-                  type="number"
-                />
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <EditableCell
+                        lane={lane}
+                        field="baseRate"
+                        value={`$${lane.baseRate}/mi`}
+                        editing={editingCell?.laneId === lane.id && editingCell?.field === 'baseRate'}
+                        onStartEdit={() => startEditing(lane.id, 'baseRate', lane.baseRate)}
+                        onSave={saveEdit}
+                        onCancel={cancelEditing}
+                        editValue={editValue}
+                        setEditValue={setEditValue}
+                        error={editError}
+                        type="number"
+                        inline={true}
+                      />
+                    </div>
+                    {(() => {
+                      const rateCheck = checkRateTooHigh(lane);
+                      return rateCheck.isTooHigh ? (
+                        <div className="flex items-center gap-1 flex-shrink-0" title={rateCheck.reason}>
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   <span className={`text-sm font-medium ${
                     parseFloat(lane.margin) < 8 ? 'text-red-400' :
@@ -253,9 +269,6 @@ export default function LaneTable({
                   }`}>
                     {lane.margin}%
                   </span>
-                </td>
-                <td className="px-4 py-3">
-                  <ScenarioBadge scenario={lane.scenario} />
                 </td>
                 <td className="px-4 py-3">
                   <LaneStatusIndicator status={lane.status} />
@@ -313,7 +326,7 @@ function SortableHeader({ field, label, sortField, sortDirection, onSort }) {
   return (
     <th
       onClick={() => onSort(field, isActive && sortDirection === 'asc' ? 'desc' : 'asc')}
-      className="px-4 py-3 text-left text-xs font-medium text-slate-400 cursor-pointer hover:text-white transition-colors"
+      className="px-4 py-3 text-left text-xs font-medium text-slate-400 cursor-pointer hover:text-white transition-colors bg-slate-900/95"
     >
       <div className="flex items-center gap-2">
         {label}
@@ -325,32 +338,8 @@ function SortableHeader({ field, label, sortField, sortDirection, onSort }) {
   );
 }
 
-function ScenarioBadge({ scenario }) {
-  const config = scenarios.find(s => s.name === scenario);
-  if (!config) return <span className="text-xs text-slate-400">{scenario}</span>;
-  
-  return (
-    <span
-      className="px-2 py-1 rounded text-xs font-medium"
-      style={{
-        backgroundColor: `${config.color}20`,
-        color: config.color,
-        border: `1px solid ${config.color}30`
-      }}
-    >
-      {scenario}
-    </span>
-  );
-}
-
 function LaneStatusIndicator({ status }) {
-  const config = {
-    Valid: { color: 'text-emerald-400', icon: CheckCircle },
-    Warning: { color: 'text-amber-400', icon: AlertTriangle },
-    Error: { color: 'text-red-400', icon: XCircle }
-  };
-  
-  const { color, icon: Icon } = config[status] || config.Valid;
+  const { color, icon: Icon } = getStatusConfig(status);
   
   return (
     <div className="flex items-center gap-2">
@@ -359,10 +348,10 @@ function LaneStatusIndicator({ status }) {
   );
 }
 
-function EditableCell({ lane, field, value, editing, onStartEdit, onSave, onCancel, editValue, setEditValue, error, type = 'text' }) {
+function EditableCell({ lane, field, value, editing, onStartEdit, onSave, onCancel, editValue, setEditValue, error, type = 'text', inline = false }) {
   if (editing) {
-    return (
-      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+    const content = (
+      <>
         <div className="flex items-center gap-2">
           {field === 'baseRate' && <span className="text-sm text-slate-400">$</span>}
           <input
@@ -387,8 +376,39 @@ function EditableCell({ lane, field, value, editing, onStartEdit, onSave, onCanc
         {error && (
           <p className="text-xs text-red-400 mt-1">{error}</p>
         )}
+      </>
+    );
+
+    if (inline) {
+      return (
+        <div onClick={(e) => e.stopPropagation()}>
+          {content}
+        </div>
+      );
+    }
+
+    return (
+      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        {content}
       </td>
     );
+  }
+
+  const cellContent = (
+    <span
+      className="text-sm text-slate-300 cursor-pointer hover:bg-slate-800/50 rounded transition-colors px-2 py-1"
+      onClick={(e) => {
+        e.stopPropagation();
+        onStartEdit();
+      }}
+      title="Click to edit"
+    >
+      {value}
+    </span>
+  );
+
+  if (inline) {
+    return cellContent;
   }
 
   return (

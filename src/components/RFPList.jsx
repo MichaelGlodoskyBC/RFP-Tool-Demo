@@ -1,56 +1,57 @@
 import React, { useState } from 'react';
-import { FileText, Clock, Send, Award, Search, Filter, Plus, Upload } from 'lucide-react';
-import RFPCard from './RFPCard';
+import { Search, Filter, Plus, Upload, Columns, Table } from 'lucide-react';
+import KanbanBoard from './KanbanBoard';
+import RFPTableView from './RFPTableView';
 import FileUploadModal from './FileUploadModal';
 import AddRFPModal from './AddRFPModal';
 
 export default function RFPList({ rfps, activeTab, setActiveTab, searchQuery, setSearchQuery, onSelectRFP, onRFPAdded }) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'kanban'
+  const [selectedRFPs, setSelectedRFPs] = useState(new Set());
   return (
     <>
-      {/* Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
-        <div className="glass-card rounded-xl p-1 flex flex-wrap gap-1 w-full lg:w-auto">
-          {[
-            { id: 'inbox', label: 'Inbox', icon: FileText, count: 5 },
-            { id: 'active', label: 'In Progress', icon: Clock, count: 7 },
-            { id: 'submitted', label: 'Submitted', icon: Send, count: 12 },
-            { id: 'awarded', label: 'Awarded', icon: Award, count: 8 }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <tab.icon className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm">{tab.label}</span>
-              {tab.count > 0 && (
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
-                  activeTab === tab.id ? 'bg-indigo-500' : 'bg-slate-700'
-                }`}>
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-3 w-full lg:w-auto flex-wrap">
-          <div className="glass-card rounded-lg px-4 py-2 flex items-center gap-3 flex-1 lg:flex-initial min-w-0">
+      {/* Header Controls */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3 w-full flex-wrap">
+          <div className="glass-card rounded-lg px-4 py-2 flex items-center gap-3 flex-1 min-w-0">
             <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <input
               type="text"
               placeholder="Search RFPs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none text-white placeholder-slate-500 w-full lg:w-64 focus:outline-none"
+              className="bg-transparent border-none text-white placeholder-slate-500 w-full focus:outline-none"
             />
           </div>
+          
+          {/* View Toggle */}
+          <div className="glass-card rounded-lg p-1 flex items-center gap-1">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2 rounded-md transition-all flex items-center gap-2 ${
+                viewMode === 'table'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+              title="Table View"
+            >
+              <Table className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`px-3 py-2 rounded-md transition-all flex items-center gap-2 ${
+                viewMode === 'kanban'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+              title="Board View"
+            >
+              <Columns className="w-4 h-4" />
+            </button>
+          </div>
+          
           <button className="glass-card px-4 py-2 rounded-lg text-slate-300 hover:text-white transition-colors flex-shrink-0">
             <Filter className="w-5 h-5" />
           </button>
@@ -73,17 +74,50 @@ export default function RFPList({ rfps, activeTab, setActiveTab, searchQuery, se
         </div>
       </div>
 
-      {/* RFP Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {rfps.map((rfp, index) => (
-          <RFPCard
-            key={rfp.id}
-            rfp={rfp}
-            onClick={() => onSelectRFP(rfp)}
-            style={{ animationDelay: `${index * 0.1}s` }}
-          />
-        ))}
-      </div>
+      {/* Selection Bar */}
+      {selectedRFPs.size > 0 && viewMode === 'table' && (
+        <div className="glass-card rounded-lg px-4 py-3 mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-300">
+              <span className="font-medium text-white">{selectedRFPs.size}</span> RFP{selectedRFPs.size !== 1 ? 's' : ''} selected
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedRFPs(new Set())}
+            className="text-sm text-slate-400 hover:text-white transition-colors"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* RFP View - Table or Kanban */}
+      {viewMode === 'table' ? (
+        <RFPTableView
+          rfps={rfps}
+          onSelectRFP={onSelectRFP}
+          selectedRFPs={selectedRFPs}
+          onToggleSelection={(rfpId) => {
+            setSelectedRFPs(prev => {
+              const next = new Set(prev);
+              if (next.has(rfpId)) {
+                next.delete(rfpId);
+              } else {
+                next.add(rfpId);
+              }
+              return next;
+            });
+          }}
+          onSelectAll={(rfpIds) => {
+            setSelectedRFPs(new Set(rfpIds));
+          }}
+        />
+      ) : (
+        <KanbanBoard
+          rfps={rfps}
+          onSelectRFP={onSelectRFP}
+        />
+      )}
 
       {/* File Upload Modal */}
       <FileUploadModal

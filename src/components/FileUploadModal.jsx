@@ -13,6 +13,7 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
   const [showTemplateConfig, setShowTemplateConfig] = useState(false);
   const [templateMapping, setTemplateMapping] = useState(null);
   const [parsingProgress, setParsingProgress] = useState(0);
+  const [rfpName, setRfpName] = useState('');
   const fileInputRef = useRef(null);
 
   if (!isOpen) return null;
@@ -83,7 +84,16 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
         } else if (fileItem.name.toLowerCase().endsWith('.csv')) {
           parsed = await parseCSVFile(fileItem.file);
         } else if (fileItem.name.toLowerCase().endsWith('.pdf')) {
-          parsed = await parsePDFFile(fileItem.file);
+          // PDF parsing with Gemini supports progress updates
+          parsed = await parsePDFFile(fileItem.file, (progress, message) => {
+            setParsingProgress(progress);
+            // Update file status with progress message for PDFs
+            if (message) {
+              setUploadedFiles(prev => 
+                prev.map(f => f.id === fileItem.id ? { ...f, progressMessage: message } : f)
+              );
+            }
+          });
         }
 
         if (parsed && parsed.headers && parsed.headers.length > 0) {
@@ -143,10 +153,16 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
       return;
     }
 
+    // Validate RFP name for new RFPs
+    if (!rfp && !rfpName.trim()) {
+      alert('Please enter an RFP name.');
+      return;
+    }
+
     // Create new RFP from extracted lanes
     const newRFP = {
       id: `RFP-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
-      shipper: 'New Shipper', // Could be extracted from file or user input
+      shipper: rfp ? rfp.shipper : (rfpName.trim() || 'New Shipper'),
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       mode: 'FTL',
       status: 'In Progress',
@@ -174,6 +190,7 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
     setExtractedLanes([]);
     setTemplateMapping(null);
     setUploadStatus('idle');
+    setRfpName('');
     onClose();
   };
 
@@ -212,6 +229,22 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* RFP Name Input - Only show for new RFPs */}
+        {!rfp && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              RFP Name *
+            </label>
+            <input
+              type="text"
+              value={rfpName}
+              onChange={(e) => setRfpName(e.target.value)}
+              placeholder="Enter RFP name"
+              className="w-full glass-card rounded-lg px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 border border-slate-700"
+            />
+          </div>
+        )}
 
         {/* Upload Area */}
         <div
@@ -282,6 +315,11 @@ export default function FileUploadModal({ isOpen, onClose, rfp, onRFPAdded }) {
                       <p className="text-xs text-slate-400">
                         {formatFileSize(fileItem.size)}
                       </p>
+                      {fileItem.progressMessage && (
+                        <p className="text-xs text-indigo-400 mt-1">
+                          {fileItem.progressMessage}
+                        </p>
+                      )}
                     </div>
                     {fileItem.status === 'success' && (
                       <div className="flex items-center gap-2">

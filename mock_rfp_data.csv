@@ -1,0 +1,20 @@
+Origin,Destination,Distance,Rate,Volume,Equipment
+Chicago IL,Atlanta GA,715,2.50,150,Dry Van
+Los Angeles CA,Dallas TX,1435,2.75,200,Refrigerated
+New York NY,Chicago IL,790,2.40,100,Dry Van
+Houston TX,Miami FL,1189,2.60,175,Flatbed
+Seattle WA,Denver CO,1307,2.85,120,Dry Van
+Atlanta GA,Charlotte NC,245,2.20,300,Dry Van
+Phoenix AZ,Los Angeles CA,373,2.30,250,Refrigerated
+Dallas TX,Memphis TN,451,2.35,180,Dry Van
+Portland OR,Seattle WA,173,2.15,400,Dry Van
+Detroit MI,Cleveland OH,169,2.10,350,Dry Van
+Boston MA,New York NY,215,2.25,280,Dry Van
+Minneapolis MN,Chicago IL,408,2.30,220,Dry Van
+Jacksonville FL,Atlanta GA,346,2.20,190,Dry Van
+San Francisco CA,Sacramento CA,88,1.95,500,Dry Van
+Kansas City MO,St. Louis MO,250,2.15,320,Dry Van
+
+
+
+

@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { getLaneStatus, getMarginWarnings } from '../constants/marginThresholds';
+import { processPDFWithGemini } from '../services/geminiService';
 
 /**
  * Parse Excel file and extract lane data
@@ -81,28 +83,33 @@ export async function parseCSVFile(file) {
 }
 
 /**
- * Parse PDF file (basic text extraction)
- * Note: Full PDF parsing requires a backend service or more advanced library
- * This is a placeholder that extracts text from PDF
+ * Parse PDF file using Gemini AI
+ * Uses Google's Gemini API to extract structured lane data from PDF documents
  */
-export async function parsePDFFile(file) {
-  // For now, return a placeholder structure
-  // In production, you'd use a PDF parsing library or backend service
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+export async function parsePDFFile(file, onProgress = null) {
+  try {
+    // Use Gemini to process the PDF
+    const parsedData = await processPDFWithGemini(file, onProgress);
     
-    reader.onload = (e) => {
-      // This is a simplified approach - full PDF parsing would require pdf.js or backend
-      resolve({
-        headers: [],
-        rows: [],
-        note: 'PDF parsing requires additional setup. Please use Excel or CSV files for automatic parsing.'
-      });
+    // Return in the same format as Excel/CSV parsers
+    return {
+      headers: parsedData.headers || [],
+      rows: parsedData.rows || [],
+      note: parsedData.note,
+      source: 'gemini'
     };
+  } catch (error) {
+    console.error('Error parsing PDF with Gemini:', error);
     
-    reader.onerror = () => reject(new Error('Failed to read PDF file'));
-    reader.readAsArrayBuffer(file);
-  });
+    // Provide user-friendly error messages
+    if (error.message.includes('API key')) {
+      throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your .env file.');
+    } else if (error.message.includes('quota') || error.message.includes('rate limit')) {
+      throw new Error('Gemini API quota exceeded. Please check your usage limits or try again later.');
+    } else {
+      throw new Error(`Failed to parse PDF: ${error.message}`);
+    }
+  }
 }
 
 /**
@@ -183,8 +190,8 @@ export function extractLanesFromData(parsedData, templateMapping = null) {
         deadhead,
         margin,
         scenario: 'Base',
-        status: parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid',
-        warnings: parseFloat(margin) < 8 ? ['Margin below threshold'] : [],
+        status: getLaneStatus(margin),
+        warnings: getMarginWarnings(margin),
         benchmark: (baseRate * 0.9).toFixed(2),
         historicalRate: null
       };

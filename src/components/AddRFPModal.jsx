@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { generateLanes } from '../data/demoData';
+import { getLaneStatus, getMarginWarnings } from '../constants/marginThresholds';
 
 export default function AddRFPModal({ isOpen, onClose, onRFPAdded }) {
   const [formData, setFormData] = useState({
@@ -81,8 +82,8 @@ export default function AddRFPModal({ isOpen, onClose, onRFPAdded }) {
         deadhead,
         margin,
         scenario: 'Base',
-        status: parseFloat(margin) < 8 ? 'Error' : parseFloat(margin) < 12 ? 'Warning' : 'Valid',
-        warnings: parseFloat(margin) < 8 ? ['Margin below threshold'] : [],
+        status: getLaneStatus(margin),
+        warnings: getMarginWarnings(margin),
         benchmark: (baseRate * 0.9).toFixed(2),
         historicalRate: null
       };
